@@ -92,9 +92,37 @@ A global high-density mask was initialized by Otsu thresholding on a regular 3-D
 - Decision/failure: rejected: foreground increase exceeded 5% guard
 - Feedback: `/Users/dannyvillanueva/Documents/Livermore/llnl_data_science_challenge_2026/data/9x9x9_octet_lattice/segmentation/iterations/iteration_05.png`
 
+### Iteration 6
+
+- Method: global high-density threshold; sampled Otsu followed by MAD-scaled continuity refinement
+- Threshold: 39745
+- Sampled foreground: 0.120193
+- Sampled 3-D components: 615
+- Largest sampled 3-D component / sampled foreground: 0.991795
+- Small sampled 3-D component burden: 0.005907
+- Slice 380 components: 250
+- Largest slice component / slice foreground: 0.066728
+- Continuity/noise score: 0.985887
+- Decision/failure: rejected: foreground increase exceeded 5% guard
+- Feedback: `/Users/dannyvillanueva/Documents/Livermore/llnl_data_science_challenge_2026/data/9x9x9_octet_lattice/segmentation/iterations/iteration_06.png`
+
+### Iteration 7
+
+- Method: global high-density threshold; sampled Otsu followed by MAD-scaled continuity refinement
+- Threshold: 39553
+- Sampled foreground: 0.121952
+- Sampled 3-D components: 586
+- Largest sampled 3-D component / sampled foreground: 0.992822
+- Small sampled 3-D component burden: 0.005567
+- Slice 380 components: 247
+- Largest slice component / slice foreground: 0.066596
+- Continuity/noise score: 0.987255
+- Decision/failure: rejected: foreground increase exceeded 5% guard
+- Feedback: `/Users/dannyvillanueva/Documents/Livermore/llnl_data_science_challenge_2026/data/9x9x9_octet_lattice/segmentation/iterations/iteration_07.png`
+
 ## Stopping reason
 
-bounded convergence: first further refinement failed the evidence guard
+three consecutive failed attempts without improvement
 
 ## Limitations
 

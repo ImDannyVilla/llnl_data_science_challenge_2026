@@ -191,9 +191,6 @@ def optimize(volume: np.ndarray, out_dir: Path) -> tuple[int, list[Iteration], s
                 failed += 1
         history.append(candidate)
 
-        if candidate.decision.startswith("rejected") or "rejected:" in candidate.decision:
-            stopping_reason = "bounded convergence: first further refinement failed the evidence guard"
-            break
         if failed >= 3:
             stopping_reason = "three consecutive failed attempts without improvement"
             break
