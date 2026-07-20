@@ -239,7 +239,31 @@ Shared: registration decision (use registered JSON), budget coordination, final 
 
 ---
 
-## 11. Top Gotchas Checklist
+## 11. Dataset Deep-Dive (measured, not assumed)
+
+Every file in `data/` was loaded and inspected. Key numbers:
+
+| File | What it actually is | Measured facts |
+|---|---|---|
+| `unitcell/unitcell.npy` | Simulated CT recon of ONE octet unit cell | `(256,256,256)` float32, 67 MB. **Values are NOT [0,1]** — actual range ≈ **[-0.003, +0.015]** (attenuation-style recon, with negative noise and streak artifacts). Threshold ≈ **0.005** gives a clean mask (~4.3% foreground). A "0.5" threshold segments *nothing*. |
+| `unitcell/polyhedron_1x1x1.json` | Design graph of the unit cell | 14 junctions, 12 struts, 1 unit cell; bbox (0,0,0)–(2,2,2) → **one unit cell = 2 design units**. Strut thickness 0.1. |
+| `unitcell/ground_truth_segmentation_image.png` | A 3D **render** (1765×1838 RGBA) of the correctly segmented cell — visual reference, not a pixel mask | Grayscale-ish render with antialiasing (values 0–255, not binary). |
+| `octet_truss_8x8x8/octet_truss_8x8x8.json` | Design graph only (no CT volume for it) | 7,168 junctions / 13,056 struts / 512 cells; bbox 0–16 (8 cells × 2 units). Good for practicing graph parsing. |
+| `9x9x9_octet_lattice/9x9x9_octet_lattice.tif` | **Real** X-ray CT scan (LFS, ~1.04 GB) | `(761, 815, 837)` **uint16**, values ≈ 29k–60k, uncompressed multipage TIF. **Identical LFS hash to the Part 2 missing_struts TIF — it is literally the same scan** (Brian Tran 0.5%-missing specimen #1). So Part 1 Task 6 already runs on real Part 2 data. |
+| `9x9x9_octet_lattice/ground_truth_segmentation_slice_380.png` | Task 7 ground truth | 800×800 RGBA — it is a **matplotlib figure** (axes + colorbar included), not a raw mask, and not pixel-aligned to the 815×837 CT slice. The LLM judge compares figures, not arrays. |
+| `missing_struts/tif_stacks/*.tif` | Real CT (same file as above) | Slice 380 shows intensity falloff across the field: a single global threshold (e.g. 40000) captures struts on the left but only nodes on the right → **adaptive/local thresholding will be needed**. |
+| `missing_struts/octet_truss_9x9x9.json` | Nominal design graph (0% missing), unregistered | 10,206 junctions / **18,468 struts** / 729 cells; bbox 0–18 design units. |
+| `missing_struts/registered_jsons/…Slices.json` | Same graph **transformed into the TIF's voxel coordinates** | Same counts (10,206/18,468/729); junction positions span ≈ (58,48,24)–(774,765,738), i.e. inside the (837,815,761) voxel grid. **Verified by overlay: junctions land on bright lattice nodes in slice 380.** Position order is (x, y, z) = (col, row, slice). |
+| `missing_struts/stls/{0,0.1,0.5,1}.stl` | Binary STL design meshes at each missing-strut % | ~175 MB, ~3.5 M triangles each (0%: 3,514,642 → 1%: 3,482,368 — fewer struts = fewer triangles). Coordinates in **mm**, centered near origin (± ~20–25 mm) → completely different frame from the TIF (unregistered, as warned). |
+| `missing_struts/file_names.txt` | Metadata for the full published dataset | The full dataset has **3 physical replicate specimens per missing-% level** (same STL, different build-plate positions); this repo ships only the `0point5dash1` scan. Explicitly confirms STL/JSON/TIF live in different coordinate systems. |
+
+**Consequences for our pipeline:**
+1. Thresholds are dataset-specific: ~0.005 for `unitcell.npy` (float recon), ~40k for the uint16 TIF — motivates histogram/Otsu-based auto-thresholding rather than hard-coding.
+2. The registered JSON + TIF pair is analysis-ready **today**: for each of the 18,468 design struts, sample the segmented volume along junction0→junction1 and flag low-material struts. No registration work needed.
+3. The intensity gradient across the real scan means the Task 6 subagent's "iterative optimization with visual feedback" is genuinely necessary, not busywork.
+4. Task 7's "ground truth" is a rendered figure — our result image should be rendered similarly (same slice, similar framing) for a fair LLM-judge comparison.
+
+## 12. Top Gotchas Checklist
 
 - [ ] `git lfs pull` before touching the `.tif` volumes or registered JSON.
 - [ ] Restart Codex CLI after **any** change to `~/.codex/config.toml`, skills, or subagents.
