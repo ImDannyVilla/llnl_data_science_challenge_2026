@@ -1,0 +1,252 @@
+# LLNL 2026 Data Science Challenge — Complete Study Notes
+### Agentic AI for Materials Science
+
+> Merged from my lecture notes + the repo README + inspection of the actual data files.
+> Mentor: **Haichao Miao** (miao1@llnl.gov), Research Scientist at LLNL — Additive Manufacturing / 3D printing.
+> Repo: `mhaichao/llnl_data_science_challenge_2026` (this repo is our fork/copy of it).
+
+---
+
+## 1. The Big Picture (one paragraph)
+
+We 3D-print metal lattice parts using **laser powder bed fusion (LPBF)**. After printing, the only way to check the *inside* of the part without destroying it is an **X-ray CT scan**, which gives a 3D volume of density values. Today, a human materials scientist manually inspects that volume for defects — this is the **bottleneck** of the whole manufacturing pipeline, and LLNL wants it automated (eventually in real time). Our job: build an **agentic AI workflow** — an LLM equipped with tools (MCP), domain instructions (skills), and specialized workers (subagents) — that can segment the CT volume, extract the lattice structure, compare it against the intended design, find defects (missing / broken / thin / bent struts, dross), and write a professional **NDE (non-destructive evaluation) report**, all with traceable, reproducible outputs.
+
+The tech stack progression from the kickoff talk: **OpenCV/image processing → LLM agents → materials science application (LPBF inspection)**.
+
+---
+
+## 2. Materials Science Background — Filling the Gaps
+
+### What is LPBF?
+**Laser Powder Bed Fusion**: a thin layer of metal powder is spread, a laser melts/fuses the cross-section of the part, the bed drops, a new powder layer is spread, repeat. It can build geometries impossible to machine — like internal lattices — but the process is failure-prone: incomplete fusion, warping, and missing/malformed features. Note the acronym is **LPBF** (my original notes had "LBPF" — the README itself typos it once too).
+
+### What is a lattice structure?
+Instead of printing solid metal, you fill the part's interior with a repeating **unit cell** — a small strut-based geometric motif tiled in 3D (here: 9×9×9 cells). You get most of the stiffness at a fraction of the weight.
+
+### What is an octet unit cell, and *why are we so interested in it?* ✅ (open question answered)
+An **octet cell** is a strut-based cell made of interconnected diagonal beams; tiled, it forms the **octet truss**. Reasons it's the star of this challenge:
+
+1. **It's mechanically near-optimal.** The octet truss is *stretch-dominated*: under load, struts carry tension/compression along their axis (efficient) rather than bending (inefficient). This gives outstanding **stiffness-to-weight and strength-to-weight** ratios — my notes said "strength at low intensity"; the right word is **low density**.
+2. **It's what LLNL actually prints.** Lightweight structures, energy absorption (crash/impact mitigation), thermal applications. The Part 2 dataset is a real LLNL/Tran et al. print in **Ti5553 titanium alloy**.
+3. **It's a great inspection testbed.** The geometry is perfectly regular and known in advance, so a *missing* or *thin* strut is well defined — you can insert defects deliberately and measure whether your algorithm catches them.
+4. **Defects matter here.** Because the truss is stretch-dominated, every strut is a load path. **A missing strut breaks a load path** — locally the structure loses strength disproportionately. That's why the defect classes are strut-level: missing, broken, thin, bent, plus **dross** (excess re-solidified material blobs, an LPBF-specific defect).
+
+### What is X-ray CT data, concretely?
+The object is rotated in an X-ray beam; material **absorbs** radiation and a reconstruction algorithm builds a **3D scalar field** — a 3D array where each **voxel** (3D pixel) holds a grayscale density value (in our simulated data, normalized to [0, 1]). High value ≈ metal, low value ≈ air. It is *not* a mesh or a point cloud — it's basically a 3D image, which is why image-processing tools (OpenCV, scikit-image) apply.
+
+### Ground truth — correcting my earlier note
+My notes said "GroundTruth is the CT scan." More precisely, it depends on the question:
+- **For segmentation quality (Part 1, Task 7):** the ground truth is the provided reference mask image `data/9x9x9_octet_lattice/ground_truth_segmentation_slice_380.png`. We compare *our* segmentation of slice 380 against it.
+- **For defect detection (Part 2):** the CT scan is the **measurement** (what was actually printed); the **design** (STL mesh and/or JSON graph of nodes+edges) is the **intent**. Defects = deviations of measurement from intent. So: align STL/JSON with the TIF, then find design struts with no material in the CT → missing struts.
+
+---
+
+## 3. The Analysis Pipeline (why each step exists)
+
+The three-stage image pipeline, all shown on the same slice in `images/`:
+
+| Stage | Input → Output | Why |
+|---|---|---|
+| **Segmentation** | density volume → binary mask (material=1, background=0) | Raw CT is fuzzy grayscale; thresholding turns "how dense is this voxel" into "is this metal or not." Simplest method: `mask = volume >= threshold`. Choosing the threshold well is the whole game (histograms, Otsu's method, visual feedback loops). |
+| **Slicing** | 3D volume → one 2D cross-section | You can't eyeball a 3D array. A CT volume is literally a stack of 2D images; viewing slice *i* along an axis is how you (and the agent) inspect data and debug segmentations. |
+| **Skeletonization** | binary mask → 1-voxel-thick centerline | See below. |
+
+### *Why skeletonization?* ✅ (open question answered)
+Skeletonization (`skimage.morphology.skeletonize`) erodes the segmented mask down to a **thin centerline that preserves shape and connectivity**. The point:
+
+1. **It converts pixels into structure.** A blob of ~millions of foreground voxels becomes a sparse curve network whose branches ≈ **struts** and junction points ≈ **nodes**. That's the same vocabulary as the design's JSON graph (junctions + struts) — so now you can compare *printed topology* vs *designed topology* graph-to-graph.
+2. **Defects become graph queries.** Missing strut = an edge in the design graph with no corresponding skeleton branch. Broken strut = a skeleton branch with a gap/disconnected component. Thin strut = small local radius of the mask around the skeleton centerline. Bent strut = centerline deviates from the straight line between its two junctions.
+3. **It's something an LLM agent can reason about.** An agent can't "look at" 10⁸ voxels, but it *can* reason over "junction 412 has 11 of 12 expected struts." Segmentation + skeletonization turn density into a symbolic structure that fits in a context window. (This was the punchline of the lecture: *"segmentation and skeletonization turn density into a structure an agent can reason about."*)
+
+---
+
+## 4. *What's the role of AI in materials science?* ✅ (open question answered)
+
+- **Old paradigm (traditional ML):** isolated point tasks — predict one property, segment one image. A human still glues every step together.
+- **New paradigm (agentic AI):** materials science is now **data-rich and workflow-heavy** — the bottleneck isn't a single prediction, it's running the whole multi-step analysis. Agents = LLMs + tools + planning + environment access = **autonomous AI research assistants** that execute the entire workflow.
+- **The agent loop** (memorize this — it's the mental model for everything we build):
+
+  > **Plan → write & call code → inspect artifacts (slices, masks, reports, logs, failures) → revise → repeat**
+
+  The "inspect artifacts" step is what makes it *agentic* rather than a script: the agent looks at its own outputs (e.g., a rendered slice of its segmentation) and self-corrects.
+
+---
+
+## 5. Agentic AI Building Blocks (the four pillars)
+
+### 5.1 MCP — Model Context Protocol
+The standardized way to let an LLM call our Python functions. Before MCP, every tool × every LLM needed custom glue code; MCP is one open protocol.
+
+- **Architecture:** *MCP server* (our Python script hosting the tools) ↔ *MCP client* (Codex CLI) speaking **JSON-RPC**.
+- **Why it's good for science:** (1) decouples our scientific code from the LLM, (2) tools are auto-discovered, (3) security — a controlled layer defining exactly what the LLM may do.
+- **We use FastMCP.** The rules that matter (this is what the "well-written descriptions" note was about — the docstring *is* the tool's UI for the agent):
+  - `@mcp.tool()` exposes a function; the **function name becomes the tool name**.
+  - The **docstring becomes the tool description** — write it for the agent: what it does, what each arg means, what it returns.
+  - **Type annotations define the input schema** (`threshold: float`); params **without defaults are required**, with defaults are optional (`axis: int = 0`).
+  - **No `*args`/`**kwargs`** — FastMCP needs an explicit signature to build the JSON schema.
+  - Return short, useful status strings (or structured data when needed downstream).
+- **Registration:** add the server to `~/.codex/config.toml` under `[mcp_servers.<name>]` with absolute paths to the Python exe and `src/mcp_server.py`. **Restart Codex CLI after every config change** (it does not hot-reload). Verify with `/mcp`.
+
+### 5.2 Skills
+MCP's weakness: many tools up front **bloats the context window** and hurts **tool selection** reliability. A **skill** is a focused, on-demand instruction package (a `SKILL.md` + optional scripts) for a specific workflow — loaded only when relevant. My one-liner from the talk holds: *"skills package domain instructions so the agent writes like a materials scientist."*
+
+The provided `nde_report_expert` skill (`.agents/skills/nde_report_expert/`) demonstrates all three capabilities a skill can have:
+1. Runs a local script (`scripts/3d_visualize.py`, called twice at elev/azim 30°/45° and 60°/45°),
+2. Autonomously invokes our MCP tools (`segment_ct_dataset`, `skeletonize`) if intermediate files don't exist,
+3. Carries system instructions for report structure (summary metrics table, visual gallery, analysis section) and hygiene rules (check array shapes, clean up temp scripts).
+
+Skills only load if Codex CLI is **started from the repo root** (it looks for `.agents/skills/`), and — same as MCP — **restart after adding/editing a skill**.
+
+### 5.3 Subagents
+Independent workers in a multi-agent system, each with its **own context window**. Why that matters: instead of crowding one agent's memory with loading + segmenting + reporting instructions, each subagent gets one bounded job — less confusion, deeper iteration, specialized instructions. My note "bounded loops for optimization and traceable outputs" is exactly the design requirement: give the subagent **explicit termination limits** (e.g., max 10 iterations or 3 failed attempts) and make it **save everything** (script, mask, plots, report) so its work is auditable.
+
+Codex subagents are TOML files in `.codex/agents/` with `name`, `description`, `model`, `model_reasoning_effort`, `sandbox_mode`, and `developer_instructions`.
+
+### 5.4 LLM Evals
+How do we know the agent's output is any good? **LLM-as-judge**: give an LLM the result image + ground-truth image + a **rubric**, and have it return structured JSON (`{"reasoning": ..., "score": 0-5}`). Reasoning-then-score ordering matters (the score should follow from the reasoning). This is a *subjective* eval — a complement to (not a replacement for) objective pixel metrics like IoU/Dice, which would make a strong addition.
+
+---
+
+## 6. What's Actually in the Repo (verified by inspection)
+
+```
+DATA_SCIENCE_CHALLENGE_2026.pdf   ← full challenge instructions (same content as README)
+README.md                          ← merged instructions (read this, it's canonical)
+requirements.txt                   ← numpy, matplotlib, fastmcp, scikit-image, tifffile
+src/
+  mcp_server.py                    ← FastMCP server, 3 tool stubs to implement (Tasks 1–3)
+  skeletonization.py               ← provided, working skeletonize_mask() (wrap it, don't rewrite)
+.agents/skills/nde_report_expert/  ← provided skill (Task 4) + 3d_visualize.py script
+images/                            ← slice.png, segmentation.png, skeleton.png examples
+presentation/                      ← intro slides PDF
+data/
+  unitcell/                        ← 1×1×1 octet cell: unitcell.npy (simulated CT, values [0,1]),
+                                      polyhedron_1x1x1.json (design graph), ground-truth seg image
+  octet_truss_8x8x8/               ← design graph JSON only (no CT volume)
+  9x9x9_octet_lattice/             ← 9x9x9_octet_lattice.tif (simulated CT, Git LFS!),
+                                      ground_truth_segmentation_slice_380.png (Task 7 GT)
+  data/missing_struts/             ← PART 2 real data (Git LFS!):
+    tif_stacks/…Slices.tif         ← real X-ray CT of printed lattice
+    stls/0.stl, 0.1.stl, 0.5.stl, 1.stl  ← design meshes at 0/0.1/0.5/1% missing struts
+    registered_jsons/…Slices.json  ← design graph ALREADY ALIGNED to the tif of same name
+    octet_truss_9x9x9.json         ← unregistered design graph
+```
+
+### ⚠️ Git LFS gotcha (bit me already)
+The `.tif` volumes and the registered JSON are **Git LFS pointers** until you run:
+```bash
+git lfs install && git lfs pull
+```
+If `np.load`/`tifffile.imread`/`json.load` explodes on a file that's ~130 bytes, you're reading a pointer, not data.
+
+### The design-graph JSON schema (verified from `octet_truss_8x8x8.json`)
+Three top-level keys — this is the "intent" side of defect detection:
+```jsonc
+{
+  "junctions": [ {"id": 0, "position": [x,y,z], "indices": [i,j,k]}, ... ],   // 7168 nodes (8x8x8)
+  "struts":    [ {"id": 0, "unit_cell_edge_idx": 1,
+                  "junction0": 0, "junction1": 9, "thickness": 0.1}, ... ],   // 13056 edges
+  "unit_cells":[ {"id": 0, "struts": [0..23], "indices": [i,j,k]}, ... ]      // 512 cells, 24 struts each
+}
+```
+So **missing-strut detection = for each strut (junction0→junction1 line segment), sample the CT/mask along that segment and test whether material is present.** The JSON gives us the exhaustive checklist.
+
+### Registration (Part 2's hidden hard problem)
+The **STL is NOT aligned** with the TIF/JSON — different coordinate frames, scales, orientations. Aligning them (registration) is a research problem in itself. Escape hatch: `registered_jsons/210127_Brian_Tran_strut_lattices_0point5dash1 1 Slices.json` **is already aligned** with the TIF of the same name. Recommendation: use the registered JSON, treat STL registration as a stretch goal.
+
+### Part 2 dataset facts (Tran et al., NDT&E International 138 (2023) 102870)
+- 9×9×9 octet lattices, LPBF-printed in **Ti5553**, from LLNL's Open Data Initiative.
+- Intentionally missing struts at **0%, 0.1%, 0.5%, 1%** (that's what the STL filenames mean).
+- Unit cell **4.56 mm**, ~10% relative density, **350 µm** strut diameter.
+- Two primary defect classes in the real data: **missing struts** and **disconnected struts**.
+- **Caveat for validation:** measured missing-strut percentages **may exceed nominal** (the printer failed extra struts beyond the designed ones), and disconnected struts are common. So "nominal 0.5%" is not a hard ground-truth count — don't score our detector as wrong just because it finds more than 0.5%.
+
+### Environment
+```bash
+conda create -n dssi_env python=3.11 -y
+conda activate dssi_env
+pip install -r requirements.txt
+```
+Helpful extra software: **Napari** (interactive 3D/slice viewer — great for sanity-checking masks) and **MeshLab** (view STL meshes). Both were name-dropped in the talk.
+
+---
+
+## 7. Part 1 — Task-by-Task Cheat Sheet
+
+| # | Task | What we build | Definition of done |
+|---|---|---|---|
+| 1 | Tool calling with MCP | Implement `segment_ct_dataset(input, output, threshold)` in `src/mcp_server.py`; register server in `~/.codex/config.toml` | `/mcp` shows the server; "segment data/unitcell/unitcell.npy with threshold …" works from chat |
+| 2 | Multiple tools | Add `visualize_slice(input, output, slice_index, axis=0)` | Agent chains segment → visualize in one conversation |
+| 3 | MCP as API wrapper | Add `skeletonize(input, output)` that **calls the provided `skeletonize_mask` internally** — the lesson is wrapping existing software, not rewriting it | Agent runs segment → visualize → skeletonize end-to-end |
+| 4 | Skills | Use provided `nde_report_expert` | "Please create an NDE report from the files in ./data" produces the MD report with metrics table + two 3D views |
+| 5 | Custom skill | Our own `.agents/skills/<name>/SKILL.md` (ideas: metadata extractor; threshold optimizer sweeping 0.3/0.5/0.7) | Skill triggers and runs after CLI restart |
+| 6 | Subagent | `.codex/agents/*.toml` **Segmentation Subagent** | Segments a `.tif`; closed-loop optimization with visual feedback; saves script + mask (`.tif`) + slice-380 PNG + MD report w/ fg/bg voxel counts, all into `segmentation/` subfolder next to the input; terminates at 10 iterations / 3 failed attempts |
+| 7 | LLM evals | `evals/rubric_segmentation_1.md` | `codex -i <gt.png> -i <result.png> "...apply rubric..."` returns JSON `{reasoning, score}` |
+
+**Task 7 rubric criteria (0–5 scale):** structural integrity (strut connectivity vs GT), false positives/negatives (over/under-segmentation), topology (junctions preserved), noise/artifacts. 5 = identical to GT … 0 = blank/unrelated.
+
+**Budget discipline (explicit rule in the README):** Codex usage is not unlimited. Frontier/high-reasoning models only for genuinely hard things (designing multi-step workflows, reviewing scientific assumptions); cheap models/low reasoning for routine coding, formatting, docs, test iteration. **Coordinate as a team to spread API-key usage evenly.**
+
+---
+
+## 8. Part 2 — Open-Ended Project
+
+Goal: a multi-agent system that can **visualize, analyze, and reason about** the `missing_struts` dataset with more autonomy than Part 1. Three suggested tracks (or propose our own):
+
+1. **Autonomous Data Explorer** — agents do EDA: one explores the directory, others pick feature-extraction methods for `.tif`/`.stl`/graph JSON; includes a Literature Research Agent + Coding Agent; output = analysis reports.
+2. **Visual Reasoner** — put a renderer (**PyVista / ParaView / Napari**) inside the agent loop so the agent looks at rendered 3D views and reasons about anomalies from what it "sees."
+3. **Interactive Co-Pilot & Dashboard** — 3D dashboard + chat; agent sees the current viewport and runs analyses on demand ("analyze connectivity in the region I'm looking at").
+
+**My take on the highest-value core (fits any track):** a **missing-strut detector** — load registered JSON + TIF, segment the TIF, then for each of the design struts sample the mask along the junction0→junction1 segment and flag struts below a material-fraction threshold; cross-check flagged struts against skeleton connectivity; render flagged regions for the visual gallery; write an NDE report ranking suspect struts. That's a complete, demoable, quantifiable pipeline that directly answers the sponsor's problem statement.
+
+---
+
+## 9. Suggested Split for Our 4-Person Team
+
+Everyone does Part 1 Tasks 1–3 individually (it's how you learn MCP), then split:
+
+| Person | Part 1 ownership | Part 2 ownership |
+|---|---|---|
+| A | Task 4 + 5 (skills) | Detection logic: strut sampling vs design graph, defect classification |
+| B | Task 6 (segmentation subagent) | Segmentation & skeletonization tuning on the *real* (noisier) CT |
+| C | Task 7 (evals + rubric) | Evals & validation: metrics (IoU/Dice), rubrics, benchmarking vs nominal % |
+| D | MCP server polish + docs | Visualization/dashboard (PyVista/Napari) + final NDE report generation |
+
+Shared: registration decision (use registered JSON), budget coordination, final presentation.
+
+---
+
+## 10. Glossary (quick reference)
+
+- **AM** — additive manufacturing (3D printing).
+- **LPBF** — laser powder bed fusion; laser melts metal powder layer by layer.
+- **X-ray CT** — computed tomography; rotational X-ray absorption → reconstructed 3D density volume.
+- **Voxel** — 3D pixel; one cell of the volume array.
+- **Octet truss** — stretch-dominated lattice of diagonal struts; high stiffness/strength at low density.
+- **Strut / junction (node)** — beam element / point where struts meet (design JSON: `struts`, `junctions`).
+- **Dross** — defect: excess re-solidified material attached to the part.
+- **Segmentation** — foreground/background labeling; here, thresholding density into a binary mask.
+- **Skeletonization** — reducing a mask to a 1-voxel centerline preserving topology.
+- **Registration** — aligning two datasets into one coordinate frame (STL ↔ CT).
+- **NDE** — non-destructive evaluation: inspecting a part without damaging it.
+- **MCP** — Model Context Protocol; standard client-server (JSON-RPC) protocol for LLM tool use.
+- **FastMCP** — Python library turning decorated functions into MCP tools.
+- **Skill** — on-demand instruction package (`SKILL.md`) for a specific workflow.
+- **Subagent** — independent agent with its own context window and bounded task.
+- **LLM eval / LLM-as-judge** — scoring outputs with an LLM against a rubric, returning structured JSON.
+- **Ground truth** — the reference you score against (provided seg images in Part 1; the design graph in Part 2).
+- **Git LFS** — large file storage; run `git lfs pull` or the big files are just pointer stubs.
+
+---
+
+## 11. Top Gotchas Checklist
+
+- [ ] `git lfs pull` before touching the `.tif` volumes or registered JSON.
+- [ ] Restart Codex CLI after **any** change to `~/.codex/config.toml`, skills, or subagents.
+- [ ] Start Codex CLI **from the repo root** or project skills won't be found.
+- [ ] Use **absolute paths** in the MCP server config.
+- [ ] Threshold convention: voxels **≥ threshold → 1** (per the docstring).
+- [ ] Task 6 outputs go in a `segmentation/` folder **next to the input tif**, slice index **380**, and the loop must terminate (10 iters / 3 fails).
+- [ ] STL is unregistered — use the pre-registered JSON unless we deliberately take on registration.
+- [ ] Real data: measured missing % can exceed nominal; disconnected struts are common — don't treat nominal % as exact ground truth.
+- [ ] Spend model budget wisely; coordinate keys across the 4 of us.
