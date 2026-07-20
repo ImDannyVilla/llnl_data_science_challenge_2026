@@ -1,0 +1,4 @@
+interface:
+  display_name: "CT Threshold Optimizer"
+  short_description: "Compare CT masks across candidate thresholds"
+  default_prompt: "Use $ct-threshold-optimizer to segment a CT volume at several thresholds and compare the masks."
