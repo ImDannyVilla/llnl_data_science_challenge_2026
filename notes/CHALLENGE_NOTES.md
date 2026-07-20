@@ -263,7 +263,23 @@ Every file in `data/` was loaded and inspected. Key numbers:
 3. The intensity gradient across the real scan means the Task 6 subagent's "iterative optimization with visual feedback" is genuinely necessary, not busywork.
 4. Task 7's "ground truth" is a rendered figure — our result image should be rendered similarly (same slice, similar framing) for a fair LLM-judge comparison.
 
-## 12. Top Gotchas Checklist
+## 12. Key Paper: Tran et al. 2023 (the source of the Part 2 dataset)
+
+**Tran, B., Fisher, K.A., Wang, J., Divin, C., Balensiefer, G.J., Townsend, A.P.** (all LLNL), "Resonant ultrasound spectroscopy measurement and modeling of additively manufactured octet truss lattice cubes," *NDT&E International* 138 (2023) 102870. [OSTI record](https://www.osti.gov/pages/biblio/2246722).
+
+**Study design:** LPBF-printed Ti-5553 octet lattice cubes (9×9×9 cells, 4.56 mm unit cell, 10% relative density) with missing struts *designed in* at 0/0.5/1% as controlled defects, 3 replicate specimens per level. Actual defect state verified by X-ray CT (= our dataset); global elastic response measured by **resonant ultrasound spectroscopy (RUS)** — sweeping frequencies and recording the cube's natural resonances — and modeled with 3D FEM + a homogeneous anisotropic continuum model.
+
+**Findings that matter for our project:**
+1. **Missing struts ↑ → mass ↓, stiffness ↓, resonance frequencies ↓** — a monotonic global signature of strut-level damage.
+2. **CT found more defects than designed:** measured missing-strut % exceeded nominal, and **disconnected struts** (printed but not fused at a junction — material present, no load path) were common. → Two defect classes: *missing* (density absent along design strut) and *disconnected* (density present but gapped at the joint; naive line-sampling passes it).
+3. **Outlier specimen:** lower effective modulus despite *higher* density (dross adds mass, not stiffness). → Density alone cannot certify structural health; **topology/connectivity is the signal** — validates the skeleton-vs-design-graph approach.
+4. The simple continuum model matched RUS well → lattices behave like an effective bulk material globally, but only CT localizes *which* strut is bad.
+
+**Framing for our presentation:** RUS is the fast/cheap *global* screen ("something is wrong"); our agentic CT pipeline is the *local* diagnosis ("strut #4,312 between junctions 2101–2110 is missing"). Validation target for the `0point5dash1` scan: ≥ ~0.5% of 18,468 struts (~92+) missing — report measured vs nominal, don't treat 0.5% as exact.
+
+**Open discrepancy:** paper-derived sources quote **424 µm** strut diameter at 10% relative density; the challenge README says **350 µm**. Likely design vs as-built (LPBF prints struts thick). Verify against the PDF.
+
+## 13. Top Gotchas Checklist
 
 - [ ] `git lfs pull` before touching the `.tif` volumes or registered JSON.
 - [ ] Restart Codex CLI after **any** change to `~/.codex/config.toml`, skills, or subagents.
