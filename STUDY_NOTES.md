@@ -98,4 +98,3 @@ The provided `nde_report_expert` skill (`.agents/skills/nde_report_expert/`) dem
 Skills only load if Codex CLI is **started from the repo root** (it looks for `.agents/skills/`), and — same as MCP — **restart after adding/editing a skill**.
 
 ### 5.3 Subagents
-
