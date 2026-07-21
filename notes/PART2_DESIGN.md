@@ -44,6 +44,16 @@ Registered-JSON positions are `[x, y, z]`; the numpy array is `(Z, Y, X) = (761,
 
 JSON `thickness = 0.1` design units ≈ **231 µm**, which matches neither the README's 350 µm (≈ 6.03 voxels) nor the paper-derived 424 µm noted in `notes/CHALLENGE_NOTES.md`. **Never use JSON thickness as a physical diameter.** The pipeline derives the nominal radius empirically (Stage 4 bootstrap, §4) and reports all three candidates.
 
+### 1.7 The registration is an exact global similarity transform (recovered)
+
+The repo contains no registration code or metadata — the registered JSON was supplied pre-aligned. Fitting registered = M·nominal + b over all 10,206 junction pairs recovers it **exactly (residual 0.0000 voxels on every junction)**: the registered graph is the nominal graph under one global 7-parameter similarity transform, not a per-node measurement.
+
+- **Uniform scale 39.4888 voxels/design unit** (all three singular values identical — no anisotropy or shear)
+- **Rotation 0.335°** (the part sat almost axis-aligned in the scanner)
+- **Translation (59.34, 52.18, 26.46)** voxels in (x, y, z)
+
+Implications: (a) registered positions are **as-designed mapped into CT space, not as-printed** — local print deviation is unmodeled, which is why exact-voxel junction hits are 89.9 % but 5×5×5 hits are 94.5 %; corridor sampling must keep its tolerance radius. (b) A better voxel-size derivation: 2.3052 mm/unit ÷ 39.4888 vox/unit = **58.38 µm/voxel** (config records this fit-based value alongside span-derived ~58.0 and the external 58.09). (c) STL→CT registration is nearly free if ever needed: compose STL-mm→design with this recovered matrix. The recovered M, b, and the one-line least-squares derivation go into `analysis_config.json`.
+
 ---
 
 ## 2. Current-state review (what exists, what's missing)
@@ -76,7 +86,7 @@ flowchart TD
     TIF --> S2["Stage 2: data prep — config freeze, segmentation replay (40129, bit-exact), registration QA gate"]
     RJ --> S2
     S2 --> S3["Stage 3: corridor-radius bootstrap + per-strut metrics (18,468 rows)"]
-    S3 --> S4["Stage 4: blind classification present/thin/broken/missing + evidence packets"]
+    S3 --> S4["Stage 4: defect team — lead agent + per-class subagents (missing / thin / broken-disconnected) + evidence packets"]
     S4 --> S5["Stage 5: sealed-recall scoring + attribution (intentional vs candidate-unintentional) + judge triage"]
     S1 --> S5
     S5 --> S6["Stage 6: spatial stats + 3D visualization + NDE report"]
@@ -86,7 +96,7 @@ flowchart TD
 
 ### 3.1 Subagents and contracts
 
-Every subagent gets a contract modeled on `segmentation_agent.toml`'s proven skeleton — exact inputs, a never-touch list, enumerated output artifacts, iteration/failure bounds, and a mandatory self-verification JSON — ported to the orchestrating platform (the TOML itself is Codex-specific and stays as reference). The roster is deliberately lean: agents exist only where there is judgment to exercise; purely deterministic stages are tool invocations sequenced by the orchestrator.
+Every subagent gets a contract modeled on `segmentation_agent.toml`'s proven skeleton — exact inputs, a never-touch list, enumerated output artifacts, iteration/failure bounds, and a mandatory self-verification JSON — ported to the orchestrating platform (the TOML itself is Codex-specific and stays as reference). The roster is deliberately lean everywhere **except Stage 4**, which is the scientific heart of the pipeline: there, a dedicated `defect_lead` agent runs one subagent per defect class, so each class's detection logic, cutoffs, and justification are owned by a specialist with a narrow contract (and the classes' very different supervision situations — §5.2 — stay cleanly separated). Elsewhere, agents exist only where there is judgment to exercise; purely deterministic stages are tool invocations sequenced by the orchestrator.
 
 | Agent | Stage | Contract highlights |
 |---|---|---|
@@ -94,7 +104,10 @@ Every subagent gets a contract modeled on `segmentation_agent.toml`'s proven ske
 | `design_diff` | 1 | Works **only in design space**; bounding-box registration forbidden; must pass the count-consistency gate before labels propagate; flags (never guesses) ambiguous edges and reports them in `label_report.md` |
 | `data_prep` | 2 | Freezes `analysis/config/analysis_config.json` (provenance class per constant: verified / derived / external / open); **replay, not exploration** — runs the recorded segmentation recipe with the bit-for-bit foreground gate (58,324,474); runs registration QA on **all** edges; emits the x-binned bias curve; fixes notes hygiene; never touches ground-truth labels |
 | `strut_metrics` | 3 | Never sees the labels; runs the corridor-radius bootstrap, then `compute_strut_metrics`; verifies 18,468 rows |
-| `defect_classifier` | 4 | **Blind:** sees metrics + dev-split labels only. Chooses and **justifies** cutoffs (judgment), executed deterministically by the tool; missing/present boundary calibrated on the dev split; thin/broken cutoffs distribution-derived (see §5.2); generates evidence packets for every non-present strut; writes `decision_log.md` |
+| `defect_lead` | 4 | **Dedicated defect-analysis agent** coordinating one subagent per defect class (below). Fans the per-strut metrics out to its subagents, adjudicates conflicts under a fixed precedence (**missing > broken > thin > present** — each strut gets exactly one label), merges the per-class findings into `classified_struts.json`, generates evidence packets for every non-present strut, and writes the merged `decision_log.md`. **Blind:** the team as a whole sees metrics + dev-split labels only; the lead never overrides a subagent silently — every adjudication is logged |
+| ├ `missing_strut_agent` | 4a | Sole subagent allowed to read `dev_split.json`. Calibrates the missing/present occupancy boundary on the ~27 dev positives; outputs `findings_missing.json` + its own decision log; forbidden to touch thin/broken cutoffs |
+| ├ `thin_strut_agent` | 4b | **No labels exist for this class** — cutoffs distribution-derived (percentiles of median/min EDT radius vs the Stage 3 empirical nominal radius); outputs `findings_thin.json` with justification; forbidden to read any label file |
+| ├ `broken_strut_agent` | 4c | Owns broken **and disconnected-at-joint** (the Tran et al. class): max-axial-gap profile + corridor-local connectivity with junction spheres masked out; distribution-derived cutoffs; outputs `findings_broken.json`; forbidden to read any label file |
 | `eval_agent` | 5 | **Sole owner of the sealed split.** Scores sealed recall (one shot, §5.4), produces the final intentional-vs-unintentional attribution table, runs judge triage on candidate unintentional defects |
 | `report_agent` | 6 | Computes spatial statistics via `compute_spatial_stats` (seeded), renders the 3D defect visualization, then compiles the report. **Report text is recompute-free: every number cited from a committed artifact**; the number-crosscheck script runs before the judge rubric |
 
@@ -137,7 +150,7 @@ All pipeline outputs live under `data/missing_struts/analysis/`; eval-owned arti
 | 1 intentional-deletion labels | **M1** — "here are the ~92 struts LLNL deleted, from design files alone" | `0.5.stl` (+`0.stl`, `0.1.stl`, `1.stl` cross-checks) + nominal JSON → `labels/intentional_deletions_{0p1,0p5,1p0}.json`, `label_report.md`; then a **stratified** 30/70 split (by x-bin and z-shell) → `labels/dev_split.json` + `evals/labels/sealed_split.json` | counts ≈ 18/92/185, monotone, tri-deficit ratio 170–180 |
 | 2 data prep (config + replay + registration QA) | **M2** — junction overlay on fresh mask | TIFF + registered JSON → `config/analysis_config.json`, `segmentation/mask.tif` (gitignored), `replay_report.json`, `slice_380.png`, `qa/registration_qa.json`, `qa/bias_by_x.png` | fg == 58,324,474 bit-for-bit; junction 5×5×5 foreground ≥ 90 % **re-measured at 40129** and recorded as the baseline; HALT on fail |
 | 3 corridor bootstrap + metrics | **M3** — sortable metrics table, worst-20 struts visualized | mask + graph npz + config → `struts/corridor_calibration.json` (empirical EDT radius from a sample of high-occupancy struts → corridor radius, recorded in config), `struts/per_strut_metrics.csv` | exactly 18,468 rows |
-| 4 blind classification | — | metrics + dev labels + config → `struts/classified_struts.json`, `thresholds.json`, `decision_log.md`, `evidence/strut_<id>/` packets for every non-present strut | every strut labeled exactly once |
+| 4 blind classification (defect team) | — | metrics + dev labels + config → per-class `struts/findings_{missing,thin,broken}.json` (from the three class subagents), merged `struts/classified_struts.json` + `thresholds.json` + `decision_log.md` (from `defect_lead`, precedence missing > broken > thin > present), `evidence/strut_<id>/` packets for every non-present strut | every strut labeled exactly once; every lead adjudication logged |
 | 5 sealed scoring + attribution + triage | **M4** — confusion matrix: "found X of 65 sealed deletions (CI), plus Y candidate unintentional defects with CT evidence" | classifications + sealed labels → `evals/results/<timestamp>.json` (recall + Wilson CI + confusion matrix), `struts/attributed_struts.json` (final intentional/unintentional table), `triage/triage_results.json` | **one-shot protocol** (§5.4); reporting, not pass/fail |
 | 6 spatial stats + 3D viz + NDE report | **M5** — the deliverable | all artifacts (read-only) → `spatial/spatial_stats.json` + figures, `report/lattice_defects_3d.png`, `report/nde_report.md` | number-crosscheck script passes; judge rubric on report prose |
 
@@ -151,12 +164,14 @@ All pipeline outputs live under `data/missing_struts/analysis/`; eval-owned arti
 
 ### 5.1 What is blinded, and what the split proves
 
-The labels' *existence* is public (Stage 1 commits `label_report.md`); what is blinded is **classifier calibration**: `defect_classifier` sees only the 30 % dev split, and the sealed 70 % (~65 struts) is read once, by `eval_agent`, at Stage 5. Blinding is **procedural, not cryptographic** — any agent could re-derive the labels — so the contracts state the prohibition explicitly and the manifest records which agent read which label file. Consequences for the report: Stage 6's report is two-part — *blind findings* (what the pipeline detected, before unsealing) and an *attribution appendix* (the final intentional-vs-unintentional table, produced by `eval_agent` at Stage 5). This avoids the trap of a "candidate unintentional" table that is 70 % sealed intentional deletions.
+The labels' *existence* is public (Stage 1 commits `label_report.md`); what is blinded is **classifier calibration**: within the Stage 4 defect team, only `missing_strut_agent` reads the 30 % dev split (the thin/broken subagents and the lead are label-free by contract), and the sealed 70 % (~65 struts) is read once, by `eval_agent`, at Stage 5. Blinding is **procedural, not cryptographic** — any agent could re-derive the labels — so the contracts state the prohibition explicitly and the manifest records which agent read which label file. Consequences for the report: Stage 6's report is two-part — *blind findings* (what the pipeline detected, before unsealing) and an *attribution appendix* (the final intentional-vs-unintentional table, produced by `eval_agent` at Stage 5). This avoids the trap of a "candidate unintentional" table that is 70 % sealed intentional deletions.
 
 ### 5.2 What supervises which class
 
-- **missing / present boundary:** calibrated on the ~27 dev positives; scored on the ~65 sealed positives.
-- **thin / broken / disconnected:** **no ground truth exists.** Cutoffs are distribution-derived (percentiles of EDT radius and max-gap over the population), justified in `decision_log.md`, and validated only via judge triage of evidence packets — never via detection metrics.
+The per-class subagent split of Stage 4 mirrors this supervision asymmetry directly:
+
+- **missing / present boundary** (`missing_strut_agent`): calibrated on the ~27 dev positives; scored on the ~65 sealed positives.
+- **thin / broken / disconnected** (`thin_strut_agent`, `broken_strut_agent`): **no ground truth exists.** Cutoffs are distribution-derived (percentiles of EDT radius and max-gap over the population), justified in each subagent's findings file and the merged `decision_log.md`, and validated only via judge triage of evidence packets — never via detection metrics.
 
 ### 5.3 Objective metrics: recall, not precision
 
@@ -204,5 +219,5 @@ One rubric doing real work, one lightweight check:
 2. **M1 (Stage 1):** `label_deleted_edges` tool + `stl-design-diff` skill — independent of the CT, and it produces the ground-truth labels everything else is scored against.
 3. **M2 (Stage 2):** TIFF support in the MCP server + segmentation replay + registration QA.
 4. **M3 (Stage 3):** corridor bootstrap + `compute_strut_metrics` — the core primitive.
-5. **M4–M5 (Stages 4–6):** classifier, sealed scoring + triage, spatial stats, `render_lattice_3d`, NDE report.
+5. **M4–M5 (Stages 4–6):** defect team (`defect_lead` + the three class subagents), sealed scoring + triage, spatial stats, `render_lattice_3d`, NDE report.
 6. **Presentation (owner: orchestrator/us):** demo script walks M1→M5; hero assets are the 3D defect render, the slice-380 junction overlay, and the confusion matrix.
