@@ -15,7 +15,7 @@ All numbers below were measured directly from the files in this repo (not taken 
 - `data/missing_struts/tif_stacks/210127_Brian_Tran_strut_lattices_0point5dash1 1 Slices.tif`: **761 pages × (815 rows × 837 cols), dtype uint16, big-endian (`>u2`), ImageJ-written, series axes `ZYX`**, ~990 MiB. No voxel-size metadata in the TIFF.
 - **It is md5-identical to `data/9x9x9_octet_lattice/9x9x9_octet_lattice.tif`** — the repo carries the same scan twice, and all Part 1 segmentation work on the latter applies verbatim to the former.
 - Full uint16 load ≈ 7 s, ~1.04 GB in RAM. Never cast the whole volume to float (2.1–4.2 GB).
-- Edge slices are atypical (slice 0 mean 49,093 vs slice 380 mean 33,068; slice 760 contains zero padding) — exclude edges from global statistics.
+- Edge slices are atypical (slice 0 mean 49,093 and slice 760 mean 44,759 vs slice 380 mean 33,068) — exclude edges from global statistics.
 
 ### 1.2 ⚠ Threshold correction: **40129, not 40049**
 
@@ -55,7 +55,7 @@ JSON `thickness = 0.1` design units ≈ **231 µm**, which matches neither the R
 | **Subagents** (`.codex/agents/`) | One: `segmentation_agent.toml` — an excellent bounded contract (exact inputs, GT prohibition, enumerated artifacts, 10-iteration/3-failure limits, self-verification) | Only one agent; it mandates fresh exploratory optimization (contradicting the frozen threshold); it's Codex-TOML/platform-specific. **Port the contract skeleton, not the file.** |
 | **Evals** (`evals/`) | One LLM-judge rubric (well-written) + one single-sample result (4/5); `verification.json` checks format only | No objective metrics at all; no repeats/calibration/metadata; single-slice coverage; **the dataset's one exact ground truth (STL diff → intentional deletions) is unused** |
 | **Notes** | `notes/CHALLENGE_NOTES.md` is current and good | Root `STUDY_NOTES.md` is a stale truncation that dies mid-heading — a context-poisoning hazard; replace with a pointer |
-| **Deps** (`requirements.txt`) | numpy, matplotlib, fastmcp, scikit-image, tifffile (unpinned; tifffile never imported) | Add **scipy, trimesh, pandas, pyvista**; pin versions |
+| **Deps** (`requirements.txt`) | numpy, matplotlib, fastmcp, scikit-image, tifffile (unpinned; tifffile never imported under `src/` — only by `scripts/` and the committed `segment_ct.py`, which also imports the un-declared scipy) | Add **scipy, trimesh, pandas, pyvista**; pin versions |
 
 ---
 
@@ -130,7 +130,7 @@ New tools:
 
 ## 4. Pipeline stages, artifacts, and milestones
 
-All outputs under `data/missing_struts/analysis/` (large binaries gitignored, regenerable; everything else committed). Milestones are numbered in execution order and each is independently demoable.
+All pipeline outputs live under `data/missing_struts/analysis/`; eval-owned artifacts (sealed split, rubrics, results, harness) live under repo-root `evals/` to keep them physically separate from what upstream agents touch. Large binaries are gitignored and regenerable; everything else is committed. Milestones are numbered in execution order and each is independently demoable.
 
 | Stage | Milestone | In → Out (key artifacts) | Gate |
 |---|---|---|---|
