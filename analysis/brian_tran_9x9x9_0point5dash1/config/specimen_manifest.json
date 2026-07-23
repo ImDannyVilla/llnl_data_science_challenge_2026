@@ -67,7 +67,16 @@
       "comparison": "value >= threshold",
       "histogram_bins": 65536,
       "histogram_encoding": "native_uint16",
-      "edge_slices_excluded": 0
+      "edge_slices_excluded": 0,
+      "chunk_depth": 8,
+      "coarse_bins": 1024,
+      "peak_smoothing_sigma_bins": 2.0,
+      "peak_prominence_fraction": 0.003,
+      "minimum_significant_peaks": 2,
+      "minimum_foreground_fraction": 0.01,
+      "maximum_foreground_fraction": 0.35,
+      "minimum_otsu_separability": 0.45,
+      "minimum_class_mean_separation_sigma": 0.75
     },
     "budgets": {
       "local_recenter_radius_voxels": 8.0,
@@ -83,7 +92,7 @@
       "nde_report": "1.0.0"
     }
   },
-  "analysis_parameters_sha256": "45c167b15fad14355bc990aab4d340bfece15775d7ef91cfe6db6032d5e8138c",
+  "analysis_parameters_sha256": "80a84416025e2e9aedc0620a12eb10bb75ca4d64df361539467178410b8afa5a",
   "derived": {
     "graph_summary": {
       "method": "canonical_lattice_topology",
@@ -94,7 +103,7 @@
           "af7bbd51657735f0a0af07ea8ede2007416c61821b7860936457ab0b76fad6a2",
           "8e422e1ceece719bdc1d0aa1b6f42273c4dea5bff6ee2ebba76e85ffddba99c7"
         ],
-        "config_sha256": "45c167b15fad14355bc990aab4d340bfece15775d7ef91cfe6db6032d5e8138c"
+        "config_sha256": "80a84416025e2e9aedc0620a12eb10bb75ca4d64df361539467178410b8afa5a"
       },
       "values": {
         "junction_count": 10206,
@@ -119,7 +128,7 @@
           "24dcb40c13c4a729cdd84b760b803d78c61bb31ec6b2411724ff6f78cafc2ec4",
           "8e422e1ceece719bdc1d0aa1b6f42273c4dea5bff6ee2ebba76e85ffddba99c7"
         ],
-        "config_sha256": "45c167b15fad14355bc990aab4d340bfece15775d7ef91cfe6db6032d5e8138c"
+        "config_sha256": "80a84416025e2e9aedc0620a12eb10bb75ca4d64df361539467178410b8afa5a"
       },
       "values": {
         "spacing": [
@@ -143,7 +152,7 @@
         "input_sha256": [
           "1dea75b7a9882065cc52d4eb137b7d2cdc86d3ad928543e751ae4c811c466b79"
         ],
-        "config_sha256": "45c167b15fad14355bc990aab4d340bfece15775d7ef91cfe6db6032d5e8138c"
+        "config_sha256": "80a84416025e2e9aedc0620a12eb10bb75ca4d64df361539467178410b8afa5a"
       },
       "values": {
         "threshold": 40054,

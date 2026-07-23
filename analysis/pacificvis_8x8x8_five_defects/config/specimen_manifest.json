@@ -67,7 +67,16 @@
       "comparison": "value >= threshold",
       "histogram_bins": 65536,
       "histogram_encoding": "full_volume_affine_uint16",
-      "edge_slices_excluded": 0
+      "edge_slices_excluded": 0,
+      "chunk_depth": 8,
+      "coarse_bins": 1024,
+      "peak_smoothing_sigma_bins": 2.0,
+      "peak_prominence_fraction": 0.003,
+      "minimum_significant_peaks": 2,
+      "minimum_foreground_fraction": 0.01,
+      "maximum_foreground_fraction": 0.35,
+      "minimum_otsu_separability": 0.45,
+      "minimum_class_mean_separation_sigma": 0.75
     },
     "budgets": {
       "local_recenter_radius_voxels": 8.0,
@@ -83,7 +92,7 @@
       "nde_report": "1.0.0"
     }
   },
-  "analysis_parameters_sha256": "1a50b99c53ad21d8d19c22732a855c1bb08a04f70a2ed754e88ee67e1502aacf",
+  "analysis_parameters_sha256": "3889d451c6174cbdae0436769c025b69d5c2a5e5d85656e9599d2a08a2fee837",
   "derived": {
     "graph_summary": {
       "method": "canonical_lattice_topology",
@@ -94,7 +103,7 @@
           "1699e3d736d2920c5a0ad9459d8b8c410b4df68016fb3a9d21f2ae4458b5edb9",
           "5424210b9bb123f540c1e808f83933e71db66e192287586dc27966e84a617c0d"
         ],
-        "config_sha256": "1a50b99c53ad21d8d19c22732a855c1bb08a04f70a2ed754e88ee67e1502aacf"
+        "config_sha256": "3889d451c6174cbdae0436769c025b69d5c2a5e5d85656e9599d2a08a2fee837"
       },
       "values": {
         "junction_count": 7168,
@@ -117,7 +126,7 @@
         "input_sha256": [
           "4c128eb1a08c50b2084bd37e9779ca459d5d0e879914575f31317fd76e360b96"
         ],
-        "config_sha256": "1a50b99c53ad21d8d19c22732a855c1bb08a04f70a2ed754e88ee67e1502aacf"
+        "config_sha256": "3889d451c6174cbdae0436769c025b69d5c2a5e5d85656e9599d2a08a2fee837"
       },
       "values": {
         "spacing": [
@@ -141,7 +150,7 @@
         "input_sha256": [
           "4c128eb1a08c50b2084bd37e9779ca459d5d0e879914575f31317fd76e360b96"
         ],
-        "config_sha256": "1a50b99c53ad21d8d19c22732a855c1bb08a04f70a2ed754e88ee67e1502aacf"
+        "config_sha256": "3889d451c6174cbdae0436769c025b69d5c2a5e5d85656e9599d2a08a2fee837"
       },
       "values": {
         "threshold": 0.0055621545633924,

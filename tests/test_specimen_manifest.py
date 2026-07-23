@@ -19,6 +19,9 @@ from specimen_manifest import (  # noqa: E402
     topology_summary,
     validate_manifest,
 )
+from segmentation_replay import histogram_sha256, otsu_from_histogram  # noqa: E402
+
+import numpy as np
 
 
 class SpecimenManifestTests(unittest.TestCase):
@@ -58,6 +61,15 @@ class SpecimenManifestTests(unittest.TestCase):
         left = {"b": 2, "a": {"d": 4, "c": 3}}
         right = {"a": {"c": 3, "d": 4}, "b": 2}
         self.assertEqual(canonical_json_sha256(left), canonical_json_sha256(right))
+
+    def test_otsu_replay_uses_manifest_threshold_convention(self) -> None:
+        histogram = np.zeros(65_536, dtype=np.int64)
+        histogram[10] = 5
+        histogram[20] = 5
+        threshold, separability = otsu_from_histogram(histogram)
+        self.assertEqual(10, threshold)
+        self.assertEqual(1.0, separability)
+        self.assertEqual(64, len(histogram_sha256(histogram)))
 
     def _write_temporary(self, manifest: dict[str, object]) -> Path:
         path = REPOSITORY_ROOT / "analysis" / "schema" / ".invalid-manifest.json"

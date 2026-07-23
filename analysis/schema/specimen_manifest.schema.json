@@ -162,7 +162,16 @@
             "comparison",
             "histogram_bins",
             "histogram_encoding",
-            "edge_slices_excluded"
+            "edge_slices_excluded",
+            "chunk_depth",
+            "coarse_bins",
+            "peak_smoothing_sigma_bins",
+            "peak_prominence_fraction",
+            "minimum_significant_peaks",
+            "minimum_foreground_fraction",
+            "maximum_foreground_fraction",
+            "minimum_otsu_separability",
+            "minimum_class_mean_separation_sigma"
           ],
           "properties": {
             "method": {
@@ -185,6 +194,47 @@
             },
             "edge_slices_excluded": {
               "type": "integer",
+              "minimum": 0
+            },
+            "chunk_depth": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "coarse_bins": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 65536
+            },
+            "peak_smoothing_sigma_bins": {
+              "type": "number",
+              "minimum": 0
+            },
+            "peak_prominence_fraction": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minimum_significant_peaks": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minimum_foreground_fraction": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "maximum_foreground_fraction": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minimum_otsu_separability": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minimum_class_mean_separation_sigma": {
+              "type": "number",
               "minimum": 0
             }
           }
