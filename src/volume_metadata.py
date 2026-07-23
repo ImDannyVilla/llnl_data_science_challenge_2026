@@ -121,10 +121,23 @@ def _statistics(chunks: Iterable[np.ndarray[Any, Any]]) -> dict[str, Any]:
     }
 
 
-def _array_chunks(array: np.ndarray[Any, Any], chunk_voxels: int) -> Iterator[np.ndarray[Any, Any]]:
-    flat = array.reshape(-1)
-    for start in range(0, int(flat.size), chunk_voxels):
-        yield flat[start : start + chunk_voxels]
+def _array_chunks(
+    array: np.ndarray[Any, Any], chunk_voxels: int
+) -> Iterator[np.ndarray[Any, Any]]:
+    """Yield storage-order chunks without copying a full Fortran-order volume."""
+    if array.flags.c_contiguous or array.flags.f_contiguous:
+        flat = array.ravel(order="K")
+        for start in range(0, int(flat.size), chunk_voxels):
+            yield flat[start : start + chunk_voxels]
+        return
+    iterator = np.nditer(
+        array,
+        flags=["external_loop", "buffered", "zerosize_ok"],
+        op_flags=["readonly"],
+        order="K",
+        buffersize=chunk_voxels,
+    )
+    yield from iterator
 
 
 def _unknown_statistics() -> dict[str, str]:
@@ -352,10 +365,13 @@ def inspect_volume(
     header_only: bool = False,
     include_sha256: bool = True,
     chunk_voxels: int = 8 * 1024 * 1024,
+    retention: str = "external",
 ) -> dict[str, Any]:
     """Inspect one supported volume and return deterministic manifest-ready data."""
     if chunk_voxels <= 0:
         raise VolumeMetadataError("chunk_voxels must be positive")
+    if retention not in {"committed", "external", "regenerable"}:
+        raise VolumeMetadataError(f"Unsupported retention policy: {retention!r}")
     resolved, relative_path = _resolve_repository_path(path, repository_root)
     volume_format = SUPPORTED_SUFFIXES.get(resolved.suffix.lower())
     if volume_format is None:
@@ -391,6 +407,7 @@ def inspect_volume(
                 "path": relative_path,
                 "sha256": digest,
                 "role": "ct_volume",
+                "retention": retention,
             },
             "ct_metadata": {
                 "format": metadata["format"],
@@ -411,6 +428,7 @@ def inspect_volumes(
     header_only: bool = False,
     include_sha256: bool = True,
     chunk_voxels: int = 8 * 1024 * 1024,
+    retention: str = "external",
 ) -> dict[str, Any]:
     """Inspect multiple volumes in caller order."""
     return {
@@ -426,6 +444,7 @@ def inspect_volumes(
                 header_only=header_only,
                 include_sha256=include_sha256,
                 chunk_voxels=chunk_voxels,
+                retention=retention,
             )
             for path in paths
         ],

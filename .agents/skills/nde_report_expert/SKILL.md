@@ -13,6 +13,10 @@ You are the **Non Destructive Evaluation Report Expert**. When this skill is act
   provenance in the report; never guess missing physical metadata.
 - **Input 1 (Original Volume):** Load the raw intensity data from the original `.npy` file.
 - **Input 2 (Segmented Masks):** Load the mask `.npy` to isolate Regions of Interest (ROIs). If this file doesn't exist, use the MCP tool segment_ct_dataset(). 
+- **Generated-mask verification:** If `segment_ct_dataset()` creates the mask,
+  invoke `$volume-metadata` on that output before feature calculation or report
+  compilation. Preserve the same repository-relative path, hash, axes, byte
+  order, and spacing-provenance fields required for an existing mask.
 - **Input 3 (Skeleton):** Load the skeleton `.npy` to calculate morphological features (e.g., length, branching points). If this file doesn't exist, use the MCP tool skeletonize(). 
 - **Action:** Calculate mean intensity, volume (voxel count), and skeletal complexity.
 

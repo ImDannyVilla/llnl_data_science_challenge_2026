@@ -40,6 +40,12 @@ def parse_args() -> argparse.Namespace:
         default=8 * 1024 * 1024,
         help="maximum voxels processed per statistics chunk",
     )
+    parser.add_argument(
+        "--retention",
+        choices=("committed", "external", "regenerable"),
+        default="external",
+        help="retention policy emitted in the manifest artifact fragment",
+    )
     return parser.parse_args()
 
 
@@ -52,6 +58,7 @@ def main() -> int:
             header_only=args.header_only,
             include_sha256=not args.skip_hash,
             chunk_voxels=args.chunk_voxels,
+            retention=args.retention,
         )
     except (OSError, TypeError, ValueError, VolumeMetadataError) as exc:
         raise SystemExit(f"error: {exc}") from exc
