@@ -239,6 +239,26 @@ def validate_manifest(
             )
 
     mode = manifest["analysis_parameters"]["registration"]["mode"]
+    intake = manifest.get("intake")
+    if intake is not None:
+        if intake["registration_mode_selection"]["mode"] != mode:
+            errors.append(
+                "intake registration mode differs from analysis_parameters"
+            )
+        for input_name, inspection_name in (
+            ("cad", "cad_inspection"),
+            ("design_graph", "graph_inspection"),
+        ):
+            artifact = manifest["inputs"][input_name]
+            inspection = intake[inspection_name]
+            if inspection["path"] != artifact["path"]:
+                errors.append(
+                    f"intake.{inspection_name}.path differs from inputs.{input_name}"
+                )
+            if inspection["sha256"] != artifact["sha256"]:
+                errors.append(
+                    f"intake.{inspection_name}.sha256 differs from inputs.{input_name}"
+                )
     aligned_artifact = manifest["inputs"].get("aligned_graph")
     aligned_role = aligned_artifact["role"] if aligned_artifact else None
     if mode == "challenge_aligned_json" and aligned_role != "aligned_graph":
@@ -255,6 +275,20 @@ def validate_manifest(
         )
 
     graph_summary = manifest["derived"].get("graph_summary")
+    if intake is not None and graph_summary is not None:
+        inspection_summary = {
+            key: intake["graph_inspection"][key]
+            for key in (
+                "junction_count",
+                "strut_count",
+                "unit_cell_count",
+                "topology_sha256",
+            )
+        }
+        if inspection_summary != graph_summary["values"]:
+            errors.append(
+                "intake.graph_inspection differs from derived.graph_summary.values"
+            )
     if graph_summary is not None and "aligned_values" in graph_summary:
         nominal = graph_summary["values"]
         aligned = graph_summary["aligned_values"]

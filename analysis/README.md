@@ -49,6 +49,41 @@ provisional contract. Downstream ROI, classification, and reporting code must
 call `specimen_manifest.require_analysis_ready` before reading scientific
 fields.
 
+## Deterministic intake core
+
+`scripts/ingest_specimen.py` accepts only explicitly associated CAD, nominal
+graph, and CT paths. It constrains them to configured repository data roots,
+streams every SHA-256, validates graph IDs/references, inspects STL bounds, and
+uses `volume-metadata` for the CT header. It does not accept a threshold and
+does not execute segmentation, registration, or defect labeling.
+
+Each run writes:
+
+- `analysis/<specimen_id>/config/ingest_request.json`;
+- `analysis/<specimen_id>/config/specimen_manifest.json`;
+- `analysis/<specimen_id>/config/ingest_receipt.json`.
+
+The receipt records input and canonical artifact hashes, warnings, unresolved
+fields, lifecycle state, method versions, and structured self-verification.
+Unchanged inputs and declarations reproduce byte-identical artifacts. A changed
+input hash changes the manifest and receipt hashes.
+
+Example autonomous intake:
+
+```bash
+python scripts/ingest_specimen.py \
+  --specimen-id new_specimen \
+  --cad data/new/design.stl \
+  --design-graph data/new/design.json \
+  --ct data/new/scan.tiff \
+  --registration-mode autonomous_v2 \
+  --confirm-association \
+  --cad-units millimeter \
+  --cad-units-provenance "scientist declaration" \
+  --array-axes zyx \
+  --aligned-graph-units voxel
+```
+
 Validate both committed examples:
 
 ```bash

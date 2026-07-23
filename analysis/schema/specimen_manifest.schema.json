@@ -112,6 +112,9 @@
         }
       }
     },
+    "intake": {
+      "$ref": "#/$defs/intakeRecord"
+    },
     "analysis_parameters": {
       "type": "object",
       "additionalProperties": false,
@@ -676,6 +679,226 @@
           "minProperties": 1
         }
       }
+    },
+    "intakeRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "association",
+        "registration_mode_selection",
+        "cad_inspection",
+        "graph_inspection",
+        "volume_metadata"
+      ],
+      "properties": {
+        "association": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source",
+            "confirmed",
+            "design_graph_to_cad",
+            "ct_to_specimen"
+          ],
+          "properties": {
+            "source": {
+              "const": "scientist_explicit"
+            },
+            "confirmed": {
+              "const": true
+            },
+            "design_graph_to_cad": {
+              "const": true
+            },
+            "ct_to_specimen": {
+              "const": true
+            }
+          }
+        },
+        "registration_mode_selection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "source"
+          ],
+          "properties": {
+            "mode": {
+              "enum": [
+                "challenge_aligned_json",
+                "autonomous_v2"
+              ]
+            },
+            "source": {
+              "const": "scientist_explicit"
+            }
+          }
+        },
+        "cad_inspection": {
+          "$ref": "#/$defs/cadInspection"
+        },
+        "graph_inspection": {
+          "$ref": "#/$defs/graphInspection"
+        },
+        "volume_metadata": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "method_version",
+            "output_schema_version"
+          ],
+          "properties": {
+            "method": {
+              "const": "volume_metadata"
+            },
+            "method_version": {
+              "type": "string"
+            },
+            "output_schema_version": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "cadInspection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "method_version",
+        "path",
+        "sha256",
+        "format",
+        "vertex_count",
+        "face_count",
+        "bounds",
+        "units",
+        "units_provenance",
+        "readable"
+      ],
+      "properties": {
+        "method": {
+          "type": "string"
+        },
+        "method_version": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "format": {
+          "const": "stl"
+        },
+        "vertex_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "face_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "bounds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "minimum",
+            "maximum"
+          ],
+          "properties": {
+            "minimum": {
+              "$ref": "#/$defs/numberTriplet"
+            },
+            "maximum": {
+              "$ref": "#/$defs/numberTriplet"
+            }
+          }
+        },
+        "units": {
+          "type": "string",
+          "minLength": 1
+        },
+        "units_provenance": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readable": {
+          "const": true
+        }
+      }
+    },
+    "graphInspection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "method_version",
+        "path",
+        "sha256",
+        "junction_count",
+        "strut_count",
+        "unit_cell_count",
+        "topology_sha256",
+        "id_reference_integrity",
+        "extra_top_level_keys"
+      ],
+      "properties": {
+        "method": {
+          "type": "string"
+        },
+        "method_version": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "junction_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "strut_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "unit_cell_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "topology_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "id_reference_integrity": {
+          "const": true
+        },
+        "extra_top_level_keys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "numberTriplet": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "items": false
     },
     "artifact": {
       "type": "object",
