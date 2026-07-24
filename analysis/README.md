@@ -84,6 +84,42 @@ python scripts/ingest_specimen.py \
   --aligned-graph-units voxel
 ```
 
+## Agent and data-prep hand-off
+
+The orchestrator invokes `.codex/agents/specimen_ingest.toml` under the
+machine-readable contract in `analysis/contracts/specimen_ingest.json`. The
+agent may ask for missing declarations and invoke the deterministic intake
+scripts, but it is forbidden to inspect labels or run segmentation,
+registration, node refinement, or scientific QA. It stops after two failed
+correction attempts.
+
+After intake, seal the next-stage envelope:
+
+```bash
+python scripts/prepare_data_prep_handoff.py \
+  analysis/<specimen_id>/config/specimen_manifest.json \
+  analysis/<specimen_id>/config/ingest_receipt.json
+```
+
+A ready hand-off allowlists exact input paths/hashes and the registration mode.
+A provisional hand-off is an explicit `halt` containing unresolved fields.
+Tampered or stale manifests/receipts cannot unlock `data_prep`.
+
+Stage 2 writes a `data-prep-result/1.0.0` envelope containing its aligned graph,
+four derived records, and mandatory Otsu/registration/local-node/ROI/metrology
+self-verification. The boundary adapter atomically validates and advances the
+manifest:
+
+```bash
+python scripts/apply_data_prep_result.py \
+  analysis/<specimen_id>/config/specimen_manifest.json \
+  analysis/<specimen_id>/config/data_prep_result.json
+```
+
+The completion receipt is published before the manifest becomes
+`analysis_ready`; downstream stages must verify both hashes and call
+`require_analysis_ready`.
+
 Validate both committed examples:
 
 ```bash
