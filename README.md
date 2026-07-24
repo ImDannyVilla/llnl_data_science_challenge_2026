@@ -128,6 +128,12 @@ repository, performs header-only inspection plus streaming SHA-256 by default,
 and returns compact manifest-ready JSON. The skill owns the scientific policy
 and call sequence; the MCP tool owns deterministic file inspection.
 
+Repository skills require their declared MCP dependencies. If a required
+server or tool is unavailable, the skill must stop and ask the user to
+configure the server or restart the client. Skills must not silently replace an
+MCP tool with a CLI, direct Python import, or improvised local implementation.
+See `AGENTS.md` for the repository-wide rule.
+
 #### Basic Image Processing Terms
 Before starting Tasks 1-3, here are a few image-processing terms you will use with respect to a volume/image:
 

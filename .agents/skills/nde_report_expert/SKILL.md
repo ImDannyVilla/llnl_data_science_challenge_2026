@@ -37,5 +37,9 @@ Assemble the findings into a markdown report including:
 # Technical Constraints
 - Ensure all `.npy` arrays are checked for shape compatibility before processing.
 - Use `$volume-metadata` as the authoritative metadata contract.
+- If any required MCP tool is unavailable, stop and explain that the
+  `segmentation-tools` MCP server must be configured and the client restarted.
+  Do not replace metadata inspection, segmentation, or skeletonization with a
+  local implementation.
 - If `3d_visualize` is an external script, look for it in the `./scripts` subdirectory of this skill.
 - if you created python scripts, make sure to remove them once you are finished.
