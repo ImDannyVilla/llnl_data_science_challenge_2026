@@ -19,6 +19,14 @@ Every specimen has a committed
 - a per-scan segmentation recipe and its derived diagnostics;
 - ROI, metrology, retry budgets, and downstream artifact schema versions.
 
+New CT inputs are inspected through `.agents/skills/volume-metadata`. Its
+`volume-metadata/1.0.0` output supplies repository-relative paths, streaming
+SHA-256, normalized dtype and byte order, axes, and per-axis spacing provenance
+to specimen ingestion. Missing axes or spacing remain `unknown`; they are never
+reconstructed from notes or array shape. Intake requires hashing-enabled output
+and rejects `sha256: unknown`; `--skip-hash` is only for a non-authoritative
+preview and cannot supply a specimen manifest.
+
 Derived records use a common envelope containing `method`, `method_version`,
 and provenance with input and canonical analysis-parameter hashes. Changing an
 analysis parameter invalidates all derived records until they are recomputed.
