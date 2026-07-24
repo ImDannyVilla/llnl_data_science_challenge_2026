@@ -9,8 +9,9 @@
   client must be configured or restarted.
 - Never replace an MCP-owned operation by invoking a bundled CLI, importing its
   implementation directly, or writing a new local substitute.
-- Local skill scripts are allowed only for capabilities that are not exposed by
-  the required MCP server. They must not duplicate an MCP tool.
+- Project skills must not bundle executable scripts for deterministic volume,
+  mask, skeleton, or visualization operations. Add those capabilities to the
+  required MCP server and invoke them through an MCP client.
 - Keep large arrays and artifacts out of model context. MCP tools should write
   them to repository paths and return compact structured status, hashes, and
   artifact paths.
