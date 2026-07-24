@@ -7,6 +7,8 @@
   "required": [
     "schema_version",
     "specimen_id",
+    "lifecycle_state",
+    "unresolved_fields",
     "inputs",
     "analysis_parameters",
     "analysis_parameters_sha256",
@@ -14,11 +16,26 @@
   ],
   "properties": {
     "schema_version": {
-      "const": "1.0.0"
+      "const": "2.0.0"
     },
     "specimen_id": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "lifecycle_state": {
+      "enum": [
+        "provisional",
+        "ready_for_data_prep",
+        "analysis_ready"
+      ]
+    },
+    "unresolved_fields": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "inputs": {
       "type": "object",
@@ -27,7 +44,6 @@
         "ct",
         "ct_metadata",
         "design_graph",
-        "aligned_graph",
         "cad"
       ],
       "properties": {
@@ -64,10 +80,8 @@
               "$ref": "#/$defs/positiveIntegerTriplet"
             },
             "dtype": {
-              "enum": [
-                "uint16",
-                "float32"
-              ]
+              "type": "string",
+              "pattern": "^(?:bool|u?int(?:8|16|32|64)|float(?:16|32|64))$"
             },
             "byte_order": {
               "enum": [
@@ -78,11 +92,21 @@
               ]
             },
             "array_axes": {
-              "const": [
-                "z",
-                "y",
-                "x"
+              "oneOf": [
+                {
+                  "const": [
+                    "z",
+                    "y",
+                    "x"
+                  ]
+                },
+                {
+                  "const": "unknown"
+                }
               ]
+            },
+            "voxel_spacing": {
+              "$ref": "#/$defs/intakeVoxelSpacing"
             }
           }
         }
@@ -129,26 +153,44 @@
           ],
           "properties": {
             "graph_axes": {
-              "const": [
-                "x",
-                "y",
-                "z"
+              "oneOf": [
+                {
+                  "const": [
+                    "x",
+                    "y",
+                    "z"
+                  ]
+                },
+                {
+                  "const": "unknown"
+                }
               ]
             },
             "array_axes": {
-              "const": [
-                "z",
-                "y",
-                "x"
+              "oneOf": [
+                {
+                  "const": [
+                    "z",
+                    "y",
+                    "x"
+                  ]
+                },
+                {
+                  "const": "unknown"
+                }
               ]
             },
             "numpy_index_expression": {
-              "const": "volume[round(z), round(y), round(x)]"
+              "enum": [
+                "volume[round(z), round(y), round(x)]",
+                "unknown"
+              ]
             },
             "aligned_graph_units": {
               "enum": [
                 "voxel",
-                "simulation_voxel"
+                "simulation_voxel",
+                "unknown"
               ]
             }
           }
@@ -283,11 +325,6 @@
     "derived": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "graph_summary",
-        "voxel_spacing",
-        "segmentation_result"
-      ],
       "properties": {
         "graph_summary": {
           "allOf": [
@@ -297,8 +334,7 @@
             {
               "type": "object",
               "required": [
-                "values",
-                "aligned_values"
+                "values"
               ],
               "properties": {
                 "values": {
@@ -444,10 +480,130 @@
               }
             }
           ]
+        },
+        "registration_result": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/derivedRecord"
+            },
+            {
+              "type": "object",
+              "required": [
+                "values"
+              ],
+              "properties": {
+                "values": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "aligned_graph_state",
+                    "overall_pass",
+                    "local_recenter_complete",
+                    "roi_gate_pass",
+                    "metrology_gate_pass"
+                  ],
+                  "properties": {
+                    "aligned_graph_state": {
+                      "enum": [
+                        "input",
+                        "pending",
+                        "derived"
+                      ]
+                    },
+                    "overall_pass": {
+                      "type": "boolean"
+                    },
+                    "local_recenter_complete": {
+                      "type": "boolean"
+                    },
+                    "roi_gate_pass": {
+                      "type": "boolean"
+                    },
+                    "metrology_gate_pass": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          ]
         }
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "analysis_parameters": {
+            "properties": {
+              "registration": {
+                "properties": {
+                  "mode": {
+                    "const": "challenge_aligned_json"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "inputs": {
+            "required": [
+              "aligned_graph"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "lifecycle_state": {
+            "enum": [
+              "ready_for_data_prep",
+              "analysis_ready"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "unresolved_fields": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "lifecycle_state": {
+            "const": "analysis_ready"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "inputs": {
+            "required": [
+              "aligned_graph"
+            ]
+          },
+          "derived": {
+            "required": [
+              "graph_summary",
+              "voxel_spacing",
+              "segmentation_result",
+              "registration_result"
+            ]
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "sha256": {
       "type": "string",
@@ -470,6 +626,56 @@
         }
       ],
       "items": false
+    },
+    "intakeVoxelSpacing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "z",
+        "y",
+        "x"
+      ],
+      "properties": {
+        "z": {
+          "$ref": "#/$defs/intakeVoxelSpacingAxis"
+        },
+        "y": {
+          "$ref": "#/$defs/intakeVoxelSpacingAxis"
+        },
+        "x": {
+          "$ref": "#/$defs/intakeVoxelSpacingAxis"
+        }
+      }
+    },
+    "intakeVoxelSpacingAxis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "unit",
+        "provenance"
+      ],
+      "properties": {
+        "value": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "const": "unknown"
+            }
+          ]
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provenance": {
+          "type": "object",
+          "minProperties": 1
+        }
+      }
     },
     "artifact": {
       "type": "object",

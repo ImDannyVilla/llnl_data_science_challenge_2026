@@ -31,6 +31,24 @@ Derived records use a common envelope containing `method`, `method_version`,
 and provenance with input and canonical analysis-parameter hashes. Changing an
 analysis parameter invalidates all derived records until they are recomputed.
 
+## Manifest lifecycle
+
+Schema version 2 separates intake from scientific readiness:
+
+- `provisional` records hashed inputs and declared conventions while preserving
+  ambiguous fields in `unresolved_fields`; autonomous registration may omit the
+  future aligned graph and its hash.
+- `ready_for_data_prep` has no unresolved intake fields and is the deterministic
+  hand-off for Otsu, registration, local recentering, and QA.
+- `analysis_ready` requires the aligned graph, topology agreement, segmentation
+  pass, registration pass, local recentering, and ROI/metrology gates.
+
+Challenge mode requires the scientist-supplied aligned JSON at intake.
+Autonomous mode does not allow a fabricated aligned-graph artifact in the
+provisional contract. Downstream ROI, classification, and reporting code must
+call `specimen_manifest.require_analysis_ready` before reading scientific
+fields.
+
 Validate both committed examples:
 
 ```bash
@@ -39,7 +57,7 @@ python scripts/validate_specimen_manifests.py
 
 Add `--verify-files` to hash locally available inputs. External and regenerable
 artifacts may be absent; add `--require-all-files` when a fully restored dataset
-is required.
+is required. Add `--require-analysis-ready` at downstream stage boundaries.
 
 Replay the supplied scan's exact-histogram Otsu gate:
 
