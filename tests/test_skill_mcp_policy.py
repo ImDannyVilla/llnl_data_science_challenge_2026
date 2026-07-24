@@ -43,6 +43,16 @@ class SkillMCPPolicyTests(unittest.TestCase):
                 self.assertIn("unavailable", instructions)
                 self.assertIn("stop", instructions)
 
+    def test_project_skills_do_not_bundle_executable_scripts(self) -> None:
+        bundled_scripts = sorted(
+            path
+            for skill_directory in SKILLS_ROOT.iterdir()
+            if skill_directory.is_dir()
+            for path in (skill_directory / "scripts").rglob("*")
+            if path.is_file()
+        )
+        self.assertEqual([], bundled_scripts)
+
 
 if __name__ == "__main__":
     unittest.main()
